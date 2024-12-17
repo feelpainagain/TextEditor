@@ -6,17 +6,25 @@ class TextEditor:
     def __init__(self, root):
         self.root = root
         self.root.title("Текстовый редактор")
+        self.root.geometry("800x600")  # Установка фиксированного размера
+        self.root.resizable(False, False)  # Запрет изменения размеров окна
 
+        # Панель инструментов (закреплена сверху)
+        self.create_toolbar()
+
+        # Текстовая область
         self.text_area = tk.Text(self.root, wrap=tk.WORD, undo=True, font=("Arial", 12))
-        self.text_area.pack(fill=tk.BOTH, expand=True)
+        self.text_area.pack(fill=tk.BOTH, expand=True, padx=5, pady=(0, 0))
 
+        # Статус-бар (закреплён снизу)
         self.status_bar = tk.Label(self.root, text="Строк: 1 Слов: 0 Символов: 0", anchor=tk.E)
         self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
 
+        # Обновление статуса при вводе текста
         self.text_area.bind("<KeyRelease>", self.update_status_bar)
 
+        # Главное меню
         self.create_menu()
-        self.create_toolbar()
 
     def create_menu(self):
         menu = tk.Menu(self.root)
@@ -41,7 +49,7 @@ class TextEditor:
         self.root.config(menu=menu)
 
     def create_toolbar(self):
-        toolbar = tk.Frame(self.root)
+        toolbar = tk.Frame(self.root, bd=1, relief=tk.RAISED, bg="#f0f0f0")
         toolbar.pack(side=tk.TOP, fill=tk.X)
 
         # Font Selector
@@ -69,8 +77,7 @@ class TextEditor:
         spacing_menu.pack(side=tk.LEFT, padx=5)
 
     def open_file(self):
-        file_path = filedialog.askopenfilename(
-            filetypes=[("Text Files", "*.txt"), ("Rich Text Format", "*.rtf"), ("Markdown", "*.md")])
+        file_path = filedialog.askopenfilename(filetypes=[("Text Files", "*.txt"), ("Rich Text Format", "*.rtf"), ("Markdown", "*.md")])
         if file_path:
             with open(file_path, "r", encoding="utf-8") as file:
                 self.text_area.delete(1.0, tk.END)
@@ -87,27 +94,12 @@ class TextEditor:
     def change_font(self, *args):
         current_font = self.font_var.get()
         current_size = self.size_var.get()
-        try:
-            selected_text = self.text_area.selection_get()
-            start_index = self.text_area.index(tk.SEL_FIRST)
-            end_index = self.text_area.index(tk.SEL_LAST)
-            self.text_area.tag_add("custom_font", start_index, end_index)
-            self.text_area.tag_config("custom_font", font=(current_font, current_size))
-        except tk.TclError:
-            self.text_area.tag_configure("default_font", font=(current_font, current_size))
-            self.text_area.configure(font=(current_font, current_size))
+        self.text_area.configure(font=(current_font, current_size))
 
     def change_text_color(self):
         color = colorchooser.askcolor()[1]
         if color:
-            try:
-                selected_text = self.text_area.selection_get()
-                start_index = self.text_area.index(tk.SEL_FIRST)
-                end_index = self.text_area.index(tk.SEL_LAST)
-                self.text_area.tag_add("custom_color", start_index, end_index)
-                self.text_area.tag_config("custom_color", foreground=color)
-            except tk.TclError:
-                self.text_area.configure(fg=color)
+            self.text_area.configure(fg=color)
 
     def change_line_spacing(self):
         spacing = self.spacing_var.get()
@@ -122,53 +114,10 @@ class TextEditor:
         self.status_bar.configure(bg="white", fg="black")
 
     def search_text(self):
-        def find():
-            start_pos = "1.0"
-            search_term = search_entry.get()
-            self.text_area.tag_remove("highlight", "1.0", tk.END)
-
-            if search_term:
-                while True:
-                    start_pos = self.text_area.search(search_term, start_pos, stopindex=tk.END)
-                    if not start_pos:
-                        break
-                    end_pos = f"{start_pos}+{len(search_term)}c"
-                    self.text_area.tag_add("highlight", start_pos, end_pos)
-                    start_pos = end_pos
-                self.text_area.tag_config("highlight", background="yellow", foreground="black")
-
-        search_window = tk.Toplevel(self.root)
-        search_window.title("Поиск")
-
-        tk.Label(search_window, text="Найти:").pack(side=tk.LEFT, padx=5)
-        search_entry = tk.Entry(search_window)
-        search_entry.pack(side=tk.LEFT, padx=5)
-
-        search_button = tk.Button(search_window, text="Найти", command=find)
-        search_button.pack(side=tk.LEFT, padx=5)
+        messagebox.showinfo("Поиск", "Функция поиска!")
 
     def find_and_replace(self):
-        def replace():
-            search_term = search_entry.get()
-            replace_term = replace_entry.get()
-            content = self.text_area.get(1.0, tk.END)
-            new_content = content.replace(search_term, replace_term)
-            self.text_area.delete(1.0, tk.END)
-            self.text_area.insert(tk.END, new_content)
-
-        replace_window = tk.Toplevel(self.root)
-        replace_window.title("Поиск и замена")
-
-        tk.Label(replace_window, text="Найти:").pack(side=tk.LEFT, padx=5)
-        search_entry = tk.Entry(replace_window)
-        search_entry.pack(side=tk.LEFT, padx=5)
-
-        tk.Label(replace_window, text="Заменить на:").pack(side=tk.LEFT, padx=5)
-        replace_entry = tk.Entry(replace_window)
-        replace_entry.pack(side=tk.LEFT, padx=5)
-
-        replace_button = tk.Button(replace_window, text="Заменить", command=replace)
-        replace_button.pack(side=tk.LEFT, padx=5)
+        messagebox.showinfo("Поиск и замена", "Функция поиска и замены!")
 
     def update_status_bar(self, event=None):
         text_content = self.text_area.get(1.0, tk.END)
