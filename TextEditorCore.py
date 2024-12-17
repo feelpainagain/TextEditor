@@ -6,7 +6,7 @@ class TextEditor:
     def __init__(self, root):
         self.root = root
         self.root.title("Текстовый редактор")
-        self.root.geometry("800x600")  # Установка фиксированного размера
+        self.root.geometry("800x600")
         self.root.resizable(False, False)  # Запрет изменения размеров окна
 
         # Панель инструментов (закреплена сверху)
@@ -53,28 +53,25 @@ class TextEditor:
         toolbar.pack(side=tk.TOP, fill=tk.X)
 
         # Font Selector
+        tk.Label(toolbar, text="Шрифт:").pack(side=tk.LEFT, padx=5)
         font_list = list(font.families())
         self.font_var = tk.StringVar(value="Arial")
-        font_menu = tk.OptionMenu(toolbar, self.font_var, *font_list, command=self.change_font)
+        font_menu = tk.OptionMenu(toolbar, self.font_var, *font_list)
         font_menu.pack(side=tk.LEFT, padx=5)
 
         # Font Size
+        tk.Label(toolbar, text="Размер:").pack(side=tk.LEFT, padx=5)
         self.size_var = tk.IntVar(value=12)
-        size_menu = tk.Spinbox(toolbar, from_=8, to=72, textvariable=self.size_var, command=self.change_font)
-        size_menu.pack(side=tk.LEFT, padx=5)
+        size_entry = tk.Spinbox(toolbar, from_=8, to=72, textvariable=self.size_var)
+        size_entry.pack(side=tk.LEFT, padx=5)
+
+        # Apply Font Button
+        font_button = tk.Button(toolbar, text="Применить шрифт", command=self.change_font)
+        font_button.pack(side=tk.LEFT, padx=5)
 
         # Text Color
         color_button = tk.Button(toolbar, text="Цвет текста", command=self.change_text_color)
         color_button.pack(side=tk.LEFT, padx=5)
-
-        # Line Spacing
-        spacing_label = tk.Label(toolbar, text="Межстрочный интервал:")
-        spacing_label.pack(side=tk.LEFT, padx=5)
-
-        self.spacing_var = tk.DoubleVar(value=1.5)
-        spacing_menu = tk.Spinbox(toolbar, from_=1.0, to=3.0, increment=0.1, textvariable=self.spacing_var,
-                                  command=self.change_line_spacing)
-        spacing_menu.pack(side=tk.LEFT, padx=5)
 
     def open_file(self):
         file_path = filedialog.askopenfilename(filetypes=[("Text Files", "*.txt"), ("Rich Text Format", "*.rtf"), ("Markdown", "*.md")])
@@ -91,19 +88,31 @@ class TextEditor:
             with open(file_path, "w", encoding="utf-8") as file:
                 file.write(self.text_area.get(1.0, tk.END))
 
-    def change_font(self, *args):
-        current_font = self.font_var.get()
-        current_size = self.size_var.get()
-        self.text_area.configure(font=(current_font, current_size))
+    def change_font(self):
+        font_name = self.font_var.get()
+        font_size = self.size_var.get()
+        try:
+            start_index = self.text_area.index(tk.SEL_FIRST)
+            end_index = self.text_area.index(tk.SEL_LAST)
+
+            font_tag = f"font_{font_name}_{font_size}"
+            self.text_area.tag_configure(font_tag, font=(font_name, font_size))
+            self.text_area.tag_add(font_tag, start_index, end_index)
+        except tk.TclError:
+            messagebox.showwarning("Выделение отсутствует", "Выделите текст для применения шрифта.")
 
     def change_text_color(self):
         color = colorchooser.askcolor()[1]
         if color:
-            self.text_area.configure(fg=color)
+            try:
+                start_index = self.text_area.index(tk.SEL_FIRST)
+                end_index = self.text_area.index(tk.SEL_LAST)
 
-    def change_line_spacing(self):
-        spacing = self.spacing_var.get()
-        self.text_area.configure(spacing1=spacing, spacing3=spacing)
+                color_tag = f"color_{color}"
+                self.text_area.tag_configure(color_tag, foreground=color)
+                self.text_area.tag_add(color_tag, start_index, end_index)
+            except tk.TclError:
+                messagebox.showwarning("Выделение отсутствует", "Выделите текст для изменения цвета.")
 
     def dark_mode(self):
         self.text_area.configure(bg="#2E2E2E", fg="white", insertbackground="white")
