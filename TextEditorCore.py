@@ -30,6 +30,8 @@ class TextEditor:
         # Главное меню
         self.create_menu()
 
+        self.bind_shortcuts()
+
     def create_menu(self):
         menu = tk.Menu(self.root)
 
@@ -37,7 +39,7 @@ class TextEditor:
         file_menu.add_command(label="Открыть", command=self.open_file)
         file_menu.add_command(label="Сохранить как", command=self.save_file)
         file_menu.add_separator()
-        file_menu.add_command(label="Выход", command=self.root.quit)
+        file_menu.add_command(label="Выход", command=self.confirm_exit)
         menu.add_cascade(label="Файл", menu=file_menu)
 
         edit_menu = tk.Menu(menu, tearoff=0)
@@ -48,6 +50,8 @@ class TextEditor:
         view_menu = tk.Menu(menu, tearoff=0)
         view_menu.add_command(label="Тёмная тема", command=self.dark_mode)
         view_menu.add_command(label="Светлая тема", command=self.light_mode)
+        view_menu.add_separator()
+        view_menu.add_command(label="Полноэкранный режим", command=self.toggle_fullscreen)
         menu.add_cascade(label="Вид", menu=view_menu)
 
         self.root.config(menu=menu)
@@ -63,36 +67,50 @@ class TextEditor:
         font_menu = tk.OptionMenu(toolbar, self.font_var, *font_list)
         font_menu.pack(side=tk.LEFT, padx=5)
 
+        # Разделитель
+        separator = tk.Frame(toolbar, width=2, bd=1, relief=tk.SUNKEN, bg="gray")
+        separator.pack(side=tk.LEFT, fill=tk.Y, padx=5, pady=2)
+
         # Размер шрифта
         tk.Label(toolbar, text="Размер:").pack(side=tk.LEFT, padx=5)
         self.size_var = tk.IntVar(value=12)
         size_entry = tk.Spinbox(toolbar, from_=8, to=72, textvariable=self.size_var)
         size_entry.pack(side=tk.LEFT, padx=5)
 
-        # Кнопка применения шрифта
-        font_button = tk.Button(toolbar, text="Применить шрифт", command=self.change_font)
-        font_button.pack(side=tk.LEFT, padx=5)
+        # Разделитель
+        separator = tk.Frame(toolbar, width=2, bd=1, relief=tk.SUNKEN, bg="gray")
+        separator.pack(side=tk.LEFT, fill=tk.Y, padx=5, pady=2)
 
         # Цвет текста
         color_button = tk.Button(toolbar, text="Цвет текста", command=self.change_text_color)
         color_button.pack(side=tk.LEFT, padx=5)
 
-        # Полноэкранный режим
-        fullscreen_button = tk.Button(toolbar, text="Полноэкранный режим", command=self.toggle_fullscreen)
-        fullscreen_button.pack(side=tk.LEFT, padx=5)
+        # Разделитель
+        separator = tk.Frame(toolbar, width=2, bd=1, relief=tk.SUNKEN, bg="gray")
+        separator.pack(side=tk.LEFT, fill=tk.Y, padx=5, pady=2)
+
+        # Кнопка применения шрифта
+        font_button = tk.Button(toolbar, text="Применить шрифт", command=self.change_font)
+        font_button.pack(side=tk.LEFT, padx=5)
+
+        # Разделитель
+        separator = tk.Frame(toolbar, width=2, bd=1, relief=tk.SUNKEN, bg="gray")
+        separator.pack(side=tk.LEFT, fill=tk.Y, padx=5, pady=2)
 
         # Вставка изображения
         insert_image_button = tk.Button(toolbar, text="Вставить картинку", command=self.insert_image)
         insert_image_button.pack(side=tk.LEFT, padx=5)
 
     def dark_mode(self):
-        """Переключает тёмную тему для текстового редактора."""
-        self.text_area.configure(bg="#2E2E2E", fg="white", insertbackground="white")  # Цвет фона, текста и курсора
-        self.status_bar.configure(bg="#2E2E2E", fg="white")
+        """Темная тема оформления."""
+        self.root.configure(bg="#2B2B2B")
+        self.text_area.configure(bg="#2B2B2B", fg="#E0E0E0", insertbackground="white")
+        self.status_bar.configure(bg="#2B2B2B", fg="#E0E0E0")
 
     def light_mode(self):
-        """Переключает светлую тему для текстового редактора."""
-        self.text_area.configure(bg="white", fg="black", insertbackground="black")  # Цвет фона, текста и курсора
+        """Светлая тема оформления."""
+        self.root.configure(bg="white")
+        self.text_area.configure(bg="white", fg="black", insertbackground="black")
         self.status_bar.configure(bg="white", fg="black")
 
     def toggle_fullscreen(self):
@@ -244,11 +262,27 @@ class TextEditor:
                 messagebox.showwarning("Ошибка", "Выделите текст для изменения цвета.")
 
     def update_status_bar(self, event=None):
+        cursor_position = self.text_area.index(tk.INSERT)
+        row, col = map(int, cursor_position.split('.'))
         text_content = self.text_area.get(1.0, tk.END)
         num_chars = len(text_content) - 1
         num_words = len(text_content.split())
         num_lines = text_content.count("\n")
-        self.status_bar.config(text=f"Строк: {num_lines} Слов: {num_words} Символов: {num_chars}")
+        self.status_bar.config(
+            text=f"Строка: {row} | Столбец: {col} | Строк: {num_lines} | Слов: {num_words} | Символов: {num_chars}"
+        )
+
+    def confirm_exit(self):
+        """Запрос подтверждения выхода из программы."""
+        if messagebox.askyesno("Подтверждение выхода", "Вы действительно хотите выйти?"):
+            self.root.quit()
+
+    def bind_shortcuts(self):
+        self.root.bind("<Control-o>", lambda event: self.open_file())
+        self.root.bind("<Control-s>", lambda event: self.save_file())
+        self.root.bind("<Control-f>", lambda event: self.search_text())
+        self.root.bind("<Control-r>", lambda event: self.find_and_replace())
+        self.root.bind("<Control-q>", lambda event: self.confirm_exit())
 
 
 if __name__ == "__main__":
