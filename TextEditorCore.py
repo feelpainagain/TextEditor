@@ -100,7 +100,6 @@ class TextEditor:
         self.is_fullscreen = not self.is_fullscreen
         self.root.attributes("-fullscreen", self.is_fullscreen)
 
-
     def insert_image(self):
         """Открывает диалог для вставки изображения и изменения его размера."""
         file_path = filedialog.askopenfilename(filetypes=[("Image Files", "*.png;*.jpg;*.jpeg;*.gif;*.bmp")])
@@ -139,12 +138,73 @@ class TextEditor:
         return input_var.get()
 
     def search_text(self):
-        """Заглушка для поиска текста."""
-        messagebox.showinfo("Поиск", "Функция поиска временно не реализована.")
+        """Осуществляет поиск текста и подсвечивает найденные фрагменты."""
+
+        def find():
+            # Удаляем старое выделение
+            self.text_area.tag_remove("highlight", "1.0", tk.END)
+            search_query = search_entry.get()
+
+            if search_query:
+                start_pos = "1.0"
+                while True:
+                    # Ищем текст в тексте
+                    start_pos = self.text_area.search(search_query, start_pos, stopindex=tk.END)
+                    if not start_pos:
+                        break
+                    end_pos = f"{start_pos}+{len(search_query)}c"
+                    self.text_area.tag_add("highlight", start_pos, end_pos)
+                    start_pos = end_pos
+
+                # Настройка тега для подсветки
+                self.text_area.tag_configure("highlight", background="yellow", foreground="black")
+
+        # Создаём диалоговое окно для поиска
+        search_window = tk.Toplevel(self.root)
+        search_window.title("Поиск")
+        search_window.geometry("300x100")
+        search_window.transient(self.root)
+        search_window.resizable(False, False)
+
+        tk.Label(search_window, text="Введите текст для поиска:").pack(pady=5)
+        search_entry = tk.Entry(search_window, width=30)
+        search_entry.pack(pady=5)
+
+        find_button = tk.Button(search_window, text="Найти", command=find)
+        find_button.pack(pady=5)
 
     def find_and_replace(self):
-        """Заглушка для поиска и замены текста."""
-        messagebox.showinfo("Поиск и замена", "Функция поиска и замены временно не реализована.")
+        """Осуществляет поиск и замену текста."""
+
+        def replace():
+            search_query = search_entry.get()
+            replace_query = replace_entry.get()
+
+            if search_query:
+                content = self.text_area.get("1.0", tk.END)
+                new_content = content.replace(search_query, replace_query)
+                self.text_area.delete("1.0", tk.END)
+                self.text_area.insert("1.0", new_content)
+
+                messagebox.showinfo("Завершено", f"Все вхождения '{search_query}' заменены на '{replace_query}'.")
+
+        # Создаём диалоговое окно для поиска и замены
+        replace_window = tk.Toplevel(self.root)
+        replace_window.title("Поиск и замена")
+        replace_window.geometry("350x150")
+        replace_window.transient(self.root)
+        replace_window.resizable(False, False)
+
+        tk.Label(replace_window, text="Найти:").pack(pady=5)
+        search_entry = tk.Entry(replace_window, width=30)
+        search_entry.pack(pady=5)
+
+        tk.Label(replace_window, text="Заменить на:").pack(pady=5)
+        replace_entry = tk.Entry(replace_window, width=30)
+        replace_entry.pack(pady=5)
+
+        replace_button = tk.Button(replace_window, text="Заменить", command=replace)
+        replace_button.pack(pady=10)
 
     def open_file(self):
         file_path = filedialog.askopenfilename(filetypes=[("Text Files", "*.txt")])
