@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import filedialog, font, messagebox, colorchooser
 from PIL import Image, ImageTk
 from PIL.Image import Resampling
+import ttkbootstrap as ttk
 
 
 class TextEditor:
@@ -13,11 +14,13 @@ class TextEditor:
 
         self.is_fullscreen = False  # Флаг для отслеживания полноэкранного режима
 
+        # Создание текстового виджета (но не pack)
+        self.text_area = tk.Text(self.root, wrap=tk.WORD, undo=True, font=("Arial", 12))
+
         # Панель инструментов
         self.create_toolbar()
 
-        # Текстовая область
-        self.text_area = tk.Text(self.root, wrap=tk.WORD, undo=True, font=("Arial", 12))
+        # Теперь размещаем текстовый виджет
         self.text_area.pack(fill=tk.BOTH, expand=True, padx=5, pady=(0, 0))
 
         # Статус-бар
@@ -30,11 +33,13 @@ class TextEditor:
         # Главное меню
         self.create_menu()
 
+        # Привязка горячих клавиш
         self.bind_shortcuts()
 
     def create_menu(self):
         menu = tk.Menu(self.root)
 
+        # Меню Файл
         file_menu = tk.Menu(menu, tearoff=0)
         file_menu.add_command(label="Открыть", command=self.open_file)
         file_menu.add_command(label="Сохранить как", command=self.save_file)
@@ -42,11 +47,16 @@ class TextEditor:
         file_menu.add_command(label="Выход", command=self.confirm_exit)
         menu.add_cascade(label="Файл", menu=file_menu)
 
+        # Меню Правка
         edit_menu = tk.Menu(menu, tearoff=0)
-        edit_menu.add_command(label="Поиск", command=self.search_text)
-        edit_menu.add_command(label="Поиск и замена", command=self.find_and_replace)
+        edit_menu.add_command(label="Отменить", command=self.text_area.edit_undo, accelerator="Ctrl+Z")
+        edit_menu.add_command(label="Повторить", command=self.text_area.edit_redo, accelerator="Ctrl+Y")
+        edit_menu.add_separator()
+        edit_menu.add_command(label="Поиск", command=self.search_text, accelerator="Ctrl+F")
+        edit_menu.add_command(label="Поиск и замена", command=self.find_and_replace, accelerator="Ctrl+H")
         menu.add_cascade(label="Правка", menu=edit_menu)
 
+        # Меню Вид
         view_menu = tk.Menu(menu, tearoff=0)
         view_menu.add_command(label="Тёмная тема", command=self.dark_mode)
         view_menu.add_command(label="Светлая тема", command=self.light_mode)
@@ -54,6 +64,7 @@ class TextEditor:
         view_menu.add_command(label="Полноэкранный режим", command=self.toggle_fullscreen)
         menu.add_cascade(label="Вид", menu=view_menu)
 
+        # Установка меню
         self.root.config(menu=menu)
 
     def create_toolbar(self):
@@ -119,22 +130,22 @@ class TextEditor:
         self.root.attributes("-fullscreen", self.is_fullscreen)
 
     def insert_image(self):
-        """Открывает диалог для вставки изображения и изменения его размера."""
+        """Вставляет изображение в позицию курсора."""
         file_path = filedialog.askopenfilename(filetypes=[("Image Files", "*.png;*.jpg;*.jpeg;*.gif;*.bmp")])
         if file_path:
             try:
-                # Запрос ширины и высоты у пользователя
+                # Запрос ширины и высоты изображения
                 width = int(self.simple_input("Введите ширину картинки:", "400"))
                 height = int(self.simple_input("Введите высоту картинки:", "300"))
 
                 # Открытие и изменение размера изображения
                 image = Image.open(file_path)
-                image = image.resize((width, height), Resampling.LANCZOS)  # Заменено на Resampling.LANCZOS
+                image = image.resize((width, height), Image.Resampling.LANCZOS)
                 self.photo_image = ImageTk.PhotoImage(image)
 
-                # Вставка изображения
-                self.text_area.image_create(tk.END, image=self.photo_image)
-                self.text_area.insert(tk.END, "\n")  # Добавляем перенос строки
+                # Получаем текущую позицию курсора и вставляем изображение
+                cursor_position = self.text_area.index(tk.INSERT)
+                self.text_area.image_create(cursor_position, image=self.photo_image)
             except Exception as e:
                 messagebox.showerror("Ошибка", f"Не удалось вставить изображение: {e}")
 
@@ -267,9 +278,8 @@ class TextEditor:
         text_content = self.text_area.get(1.0, tk.END)
         num_chars = len(text_content) - 1
         num_words = len(text_content.split())
-        num_lines = text_content.count("\n")
         self.status_bar.config(
-            text=f"Строка: {row} | Столбец: {col} | Строк: {num_lines} | Слов: {num_words} | Символов: {num_chars}"
+            text=f"Строка: {row} | Столбец: {col} | Слов: {num_words} | Символов: {num_chars}"
         )
 
     def confirm_exit(self):
@@ -278,6 +288,8 @@ class TextEditor:
             self.root.quit()
 
     def bind_shortcuts(self):
+        self.root.bind("<Control-z>", lambda event: self.text_area.edit_undo())
+        self.root.bind("<Control-y>", lambda event: self.text_area.edit_redo())
         self.root.bind("<Control-o>", lambda event: self.open_file())
         self.root.bind("<Control-s>", lambda event: self.save_file())
         self.root.bind("<Control-f>", lambda event: self.search_text())
