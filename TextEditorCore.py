@@ -20,7 +20,7 @@ class TextEditor:
         # Панель инструментов
         self.create_toolbar()
 
-        # Теперь размещаем текстовый виджет
+        # Текстовый виджет
         self.text_area.pack(fill=tk.BOTH, expand=True, padx=5, pady=(0, 0))
 
         # Статус-бар
@@ -57,12 +57,12 @@ class TextEditor:
         menu.add_cascade(label="Правка", menu=edit_menu)
 
         # Меню Вид
-        view_menu = tk.Menu(menu, tearoff=0)
-        view_menu.add_command(label="Тёмная тема", command=self.dark_mode)
-        view_menu.add_command(label="Светлая тема", command=self.light_mode)
-        view_menu.add_separator()
-        view_menu.add_command(label="Полноэкранный режим", command=self.toggle_fullscreen)
-        menu.add_cascade(label="Вид", menu=view_menu)
+        self.view_menu = tk.Menu(menu, tearoff=0)  # Сохраняем ссылку на подменю "Вид"
+        self.view_menu.add_command(label="Тёмная тема", command=self.dark_mode)
+        self.view_menu.add_command(label="Светлая тема", command=self.light_mode)
+        self.view_menu.add_separator()
+        self.view_menu.add_command(label="Полноэкранный режим", command=self.toggle_fullscreen)
+        menu.add_cascade(label="Вид", menu=self.view_menu)
 
         # Установка меню
         self.root.config(menu=menu)
@@ -92,8 +92,13 @@ class TextEditor:
         separator = tk.Frame(toolbar, width=2, bd=1, relief=tk.SUNKEN, bg="gray")
         separator.pack(side=tk.LEFT, fill=tk.Y, padx=5, pady=2)
 
-        # Цвет текста
-        color_button = tk.Button(toolbar, text="Цвет текста", command=self.change_text_color)
+        # Загрузка иконки для цвета текста
+        image = Image.open("palette.png").resize((24, 24))
+        palette_icon = ImageTk.PhotoImage(image)
+
+        # Кнопка цвета текста с иконкой
+        color_button = tk.Button(toolbar, image=palette_icon, command=self.change_text_color)
+        color_button.image = palette_icon  # Сохраняем ссылку на изображение
         color_button.pack(side=tk.LEFT, padx=5)
 
         # Разделитель
@@ -125,9 +130,12 @@ class TextEditor:
         self.status_bar.configure(bg="white", fg="black")
 
     def toggle_fullscreen(self):
-        """Включает/выключает полноэкранный режим."""
+        """Переключает между полноэкранным и оконным режимами."""
         self.is_fullscreen = not self.is_fullscreen
         self.root.attributes("-fullscreen", self.is_fullscreen)
+
+        # Обновляем текст пункта меню
+        self.view_menu.entryconfig(3, label="Оконный режим" if self.is_fullscreen else "Полноэкранный режим")
 
     def insert_image(self):
         """Вставляет изображение в позицию курсора."""
