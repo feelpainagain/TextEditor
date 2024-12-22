@@ -503,6 +503,8 @@ class TextEditor:
             print("[DEBUG] Пропуск записи изменения из-за is_restoring")
             return
 
+        action = None
+
         if change_type == "text":
             current_text = self.text_area.get(1.0, tk.END).strip()
             cursor_position = self.text_area.index(tk.INSERT)
@@ -511,7 +513,11 @@ class TextEditor:
                 print("[DEBUG] Изменение текста совпадает с последним сохранённым состоянием, запись пропущена")
                 return
 
-            action = {"type": "text", "text": current_text, "cursor": cursor_position}
+            action = {
+                "type": "text",
+                "text": current_text,
+                "cursor": cursor_position,
+            }
 
         elif change_type == "format":
             if not self.text_area.tag_ranges(tk.SEL):
@@ -543,9 +549,10 @@ class TextEditor:
                 "color": color,
             }
 
-        self.history.append(action)
-        self.redo_stack.clear()
-        print(f"[DEBUG] Записано действие: {action}")
+        if action:
+            self.history.append(action)
+            self.redo_stack.clear()
+            print(f"[DEBUG] Записано действие: {action}")
 
     def get_font_from_tags(self, tags):
         """Возвращает шрифт из списка тегов."""
@@ -615,17 +622,26 @@ class TextEditor:
                 for tag in last_action["tags"]:
                     self.text_area.tag_remove(tag, start, end)
 
-                # Восстановление цвета
-                if last_action.get("color"):
+                # Восстановление шрифта и размера
+                font_tag = f"font_{last_action['font']}_{last_action['size']}"
+                self.text_area.tag_configure(font_tag, font=(last_action["font"], last_action["size"]))
+                self.text_area.tag_add(font_tag, start, end)
+
+                # Восстановление других атрибутов
+                if last_action["bold"]:
+                    self.text_area.tag_add("bold", start, end)
+
+                if last_action["italic"]:
+                    self.text_area.tag_add("italic", start, end)
+
+                if last_action["underline"]:
+                    self.text_area.tag_add("underline", start, end)
+
+                if last_action["color"]:
                     color_tag = f"color_{last_action['color']}"
                     self.text_area.tag_configure(color_tag, foreground=last_action["color"])
                     self.text_area.tag_add(color_tag, start, end)
 
-                # Восстановление размера шрифта
-                if last_action.get("font_size"):
-                    font_tag = f"font_{last_action['font']}_{last_action['font_size']}"
-                    self.text_area.tag_configure(font_tag, font=(last_action['font'], last_action['font_size']))
-                    self.text_area.tag_add(font_tag, start, end)
             self.redo_stack.append(last_action)
         except Exception as e:
             print(f"[ERROR] Ошибка в undo: {e}")
@@ -648,16 +664,27 @@ class TextEditor:
             elif last_action["type"] == "format":
                 start = last_action["start"]
                 end = last_action["end"]
+
                 # Повторение шрифта и размера
-                font_tag = f"font_{last_action['font']}_{last_action['font_size']}"
-                self.text_area.tag_configure(font_tag, font=(last_action['font'], last_action['font_size']))
+                font_tag = f"font_{last_action['font']}_{last_action['size']}"
+                self.text_area.tag_configure(font_tag, font=(last_action["font"], last_action["size"]))
                 self.text_area.tag_add(font_tag, start, end)
 
-                # Повторение цвета
-                if last_action.get("color"):
+                # Повторение других атрибутов
+                if last_action["bold"]:
+                    self.text_area.tag_add("bold", start, end)
+
+                if last_action["italic"]:
+                    self.text_area.tag_add("italic", start, end)
+
+                if last_action["underline"]:
+                    self.text_area.tag_add("underline", start, end)
+
+                if last_action["color"]:
                     color_tag = f"color_{last_action['color']}"
                     self.text_area.tag_configure(color_tag, foreground=last_action["color"])
                     self.text_area.tag_add(color_tag, start, end)
+
             self.history.append(last_action)
         except Exception as e:
             print(f"[ERROR] Ошибка в redo: {e}")
