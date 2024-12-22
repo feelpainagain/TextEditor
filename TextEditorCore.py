@@ -498,6 +498,7 @@ class TextEditor:
         )
 
     def record_change(self, event=None, change_type="text"):
+        """Сохраняет изменения текста или форматирования в историю."""
         if self.is_restoring:
             print("[DEBUG] Пропуск записи изменения из-за is_restoring")
             return
@@ -510,21 +511,44 @@ class TextEditor:
                 print("[DEBUG] Изменение текста совпадает с последним сохранённым состоянием, запись пропущена")
                 return
 
-            action = {"type": "text", "text": current_text, "cursor": cursor_position}
-        elif change_type == "format":
-            try:
-                start_index = self.text_area.index(tk.SEL_FIRST)
-                end_index = self.text_area.index(tk.SEL_LAST)
-                tags = self.text_area.tag_names(start_index)
+            action = {
+                "type": "text",
+                "text": current_text,
+                "cursor": cursor_position,
+            }
 
-                action = {"type": "format", "start": start_index, "end": end_index, "tags": tags}
-            except tk.TclError:
+        elif change_type == "format":
+            if not self.text_area.tag_ranges(tk.SEL):
                 print("[DEBUG] Нет выделенного текста для записи форматирования")
                 return
 
+            start_index = self.text_area.index(tk.SEL_FIRST)
+            end_index = self.text_area.index(tk.SEL_LAST)
+            tags = self.text_area.tag_names(start_index)
+
+            # Извлекаем шрифт, размер и атрибуты
+            font = self.get_font_from_tags(tags)
+            size = self.get_font_size_from_tags(tags)
+            bold = "bold" in tags
+            italic = "italic" in tags
+            underline = "underline" in tags
+            color = self.get_color_from_tags(tags)
+
+            action = {
+                "type": "format",
+                "start": start_index,
+                "end": end_index,
+                "font": font,
+                "size": size,
+                "bold": bold,
+                "italic": italic,
+                "underline": underline,
+                "color": color,
+            }
+
         self.history.append(action)
         self.redo_stack.clear()
-        print(f"[DEBUG] Добавлено действие в history: {action}")
+        print(f"[DEBUG] Записано действие: {action}")
 
     def get_font_from_tags(self, tags):
         """Возвращает шрифт из списка тегов."""
@@ -591,25 +615,30 @@ class TextEditor:
                 self.text_area.delete(1.0, tk.END)
                 self.text_area.insert(1.0, last_action["text"])
                 self.text_area.mark_set(tk.INSERT, last_action["cursor"])
-                print("[DEBUG] Восстановлено текстовое действие.")
-
             elif last_action["type"] == "format":
                 start = last_action["start"]
                 end = last_action["end"]
 
-                for tag in last_action["tags"]:
-                    self.text_area.tag_remove(tag, start, end)
+                for tag in last_action.keys():
+                    if tag in ["font", "size", "bold", "italic", "underline", "color"]:
+                        self.text_area.tag_remove(tag, start, end)
 
                 if last_action.get("color"):
                     color_tag = f"color_{last_action['color']}"
                     self.text_area.tag_configure(color_tag, foreground=last_action["color"])
                     self.text_area.tag_add(color_tag, start, end)
 
-                print(f"[DEBUG] Форматирование восстановлено: {start} - {end}")
+                if last_action.get("bold"):
+                    self.text_area.tag_add("bold", start, end)
+
+                if last_action.get("italic"):
+                    self.text_area.tag_add("italic", start, end)
+
+                if last_action.get("underline"):
+                    self.text_area.tag_add("underline", start, end)
 
             self.redo_stack.append(last_action)
-            print("[DEBUG] Действие добавлено в стек redo.")
-        except tk.TclError as e:
+        except Exception as e:
             print(f"[ERROR] Ошибка в undo: {e}")
         finally:
             self.is_restoring = False
@@ -633,16 +662,22 @@ class TextEditor:
             elif last_action["type"] == "format":
                 start = last_action["start"]
                 end = last_action["end"]
-                for tag in last_action["tags"]:
-                    self.text_area.tag_add(tag, start, end)
 
                 if last_action.get("color"):
                     color_tag = f"color_{last_action['color']}"
                     self.text_area.tag_configure(color_tag, foreground=last_action["color"])
                     self.text_area.tag_add(color_tag, start, end)
 
+                if last_action.get("bold"):
+                    self.text_area.tag_add("bold", start, end)
+
+                if last_action.get("italic"):
+                    self.text_area.tag_add("italic", start, end)
+
+                if last_action.get("underline"):
+                    self.text_area.tag_add("underline", start, end)
+
             self.history.append(last_action)
-            print(f"[DEBUG] Действие добавлено обратно в history: {last_action}")
         except Exception as e:
             print(f"[ERROR] Ошибка в redo: {e}")
         finally:
