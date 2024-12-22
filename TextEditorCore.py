@@ -1,5 +1,8 @@
 import tkinter as tk
+import json
+import os
 from tkinter import filedialog, font, messagebox, colorchooser
+from tkinter.ttk import Progressbar
 from PIL import Image, ImageTk
 from PIL.Image import Resampling
 import ttkbootstrap as ttk
@@ -9,7 +12,7 @@ class TextEditor:
     def __init__(self, root):
         self.root = root
         self.root.title("Текстовый редактор")
-        self.root.geometry("800x600")
+        self.root.geometry("1500x700")
         self.root.resizable(False, False)
 
         self.is_fullscreen = False  # Флаг для отслеживания полноэкранного режима
@@ -49,7 +52,7 @@ class TextEditor:
 
         # Меню Правка
         edit_menu = tk.Menu(menu, tearoff=0)
-        edit_menu.add_command(label="Отменить", command=self.text_area.edit_undo, accelerator="Ctrl+Z")
+        edit_menu.add_command(label="Отменить", command=self.undo, accelerator="Ctrl+Z")
         edit_menu.add_command(label="Повторить", command=self.text_area.edit_redo, accelerator="Ctrl+Y")
         edit_menu.add_separator()
         edit_menu.add_command(label="Поиск", command=self.search_text, accelerator="Ctrl+F")
@@ -104,6 +107,18 @@ class TextEditor:
         # Разделитель
         separator = tk.Frame(toolbar, width=2, bd=1, relief=tk.SUNKEN, bg="gray")
         separator.pack(side=tk.LEFT, fill=tk.Y, padx=5, pady=2)
+
+        # Жирный шрифт
+        bold_button = tk.Button(toolbar, text="Жирный", command=self.toggle_bold)
+        bold_button.pack(side=tk.LEFT, padx=5)
+
+        # Курсив
+        italic_button = tk.Button(toolbar, text="Курсив", command=self.toggle_italic)
+        italic_button.pack(side=tk.LEFT, padx=5)
+
+        # Подчёркивание
+        underline_button = tk.Button(toolbar, text="Подчёркивание", command=self.toggle_underline)
+        underline_button.pack(side=tk.LEFT, padx=5)
 
         # Кнопка применения шрифта
         font_button = tk.Button(toolbar, text="Применить шрифт", command=self.change_font)
@@ -244,17 +259,152 @@ class TextEditor:
         replace_button.pack(pady=10)
 
     def open_file(self):
-        file_path = filedialog.askopenfilename(filetypes=[("Text Files", "*.txt")])
+        """Открывает текстовый или JSON файл с текстом и форматированием."""
+        file_path = filedialog.askopenfilename(
+            filetypes=[("JSON Files", "*.json"), ("All Files", "*.*")]
+        )
         if file_path:
-            with open(file_path, "r", encoding="utf-8") as file:
-                self.text_area.delete(1.0, tk.END)
-                self.text_area.insert(tk.END, file.read())
+            file_extension = os.path.splitext(file_path)[1].lower()
+            try:
+                if file_extension == ".json":
+                    # Загружаем текст и форматирование из JSON
+                    with open(file_path, "r", encoding="utf-8") as file:
+                        json_data = json.load(file)
+                        self.json_to_text(json_data)
+                else:
+                    messagebox.showwarning("Ошибка", "Поддерживаются только файлы формата JSON.")
+            except Exception as e:
+                messagebox.showerror("Ошибка", f"Не удалось открыть файл: {e}")
+
+    def text_to_json(self):
+        """Конвертирует текст с форматированием в JSON, включая стиль текста, цвет, размер и шрифт."""
+        data = []
+        current_index = "1.0"
+
+        while current_index != self.text_area.index(tk.END):
+            try:
+                # Получаем текст символа
+                next_index = self.text_area.index(f"{current_index} +1c")
+                char = self.text_area.get(current_index, next_index)
+
+                # Инициализируем параметры
+                font_name = "Arial"
+                font_size = 12
+                color = "#000000"
+                bold = False
+                italic = False
+                underline = False
+
+                # Извлекаем теги символа
+                tags = self.text_area.tag_names(current_index)
+                print(f"[DEBUG] Символ: '{char}', Индекс: {current_index}, Теги: {tags}")
+
+                for tag in tags:
+                    try:
+                        # Извлекаем шрифт
+                        font_config = self.text_area.tag_cget(tag, "font")
+                        if font_config:
+                            parts = font_config.split()
+                            font_name = parts[0]
+                            if len(parts) > 1:
+                                font_size = int(parts[1])
+                            print(f"[DEBUG] Извлечён шрифт: {font_name}, Размер: {font_size}")
+
+                        # Проверяем жирность
+                        if tag == "bold":
+                            bold = True
+
+                        # Проверяем курсив
+                        if tag == "italic":
+                            italic = True
+
+                        # Проверяем подчёркивание
+                        if tag == "underline":
+                            underline = True
+
+                        # Проверяем и извлекаем цвет текста
+                        if "color" in tag:
+                            color = self.text_area.tag_cget(tag, "foreground")
+                            print(f"[DEBUG] Извлечён цвет текста: {color}")
+                    except tk.TclError as e:
+                        print(f"[ERROR] Ошибка при извлечении данных из тега '{tag}': {e}")
+
+                # Добавляем данные о символе
+                data.append({
+                    "text": char,  # Сохраняем даже пробелы и пустые строки
+                    "font": font_name,
+                    "size": font_size,
+                    "bold": bold,
+                    "italic": italic,
+                    "underline": underline,
+                    "color": color
+                })
+
+                # Обновляем текущий индекс
+                current_index = next_index
+
+            except Exception as e:
+                print(f"[ERROR] Ошибка обработки символа {current_index}: {e}")
+                break
+
+        print("[DEBUG] Все символы обработаны, данные сохранены.")
+        return data
+
+    def json_to_text(self, json_data):
+        """Восстанавливает текст с форматированием из JSON, включая пустые строки и пробелы."""
+        self.text_area.delete(1.0, tk.END)  # Удаляем существующий текст
+
+        for char_data in json_data:
+            start_index = self.text_area.index(tk.INSERT)
+            self.text_area.insert(tk.INSERT, char_data["text"])
+            end_index = self.text_area.index(tk.INSERT)
+
+            print(f"[DEBUG] Восстановление символа: '{char_data['text']}'")
+            print(
+                f"[DEBUG] Применяем шрифт: {char_data['font']}, Размер: {char_data['size']}, Цвет: {char_data['color']}")
+            print(
+                f"[DEBUG] Жирный: {char_data['bold']}, Курсив: {char_data['italic']}, Подчёркивание: {char_data['underline']}")
+
+            # Применяем шрифт и размер
+            font_tag = f"font_{char_data['font']}_{char_data['size']}"
+            self.text_area.tag_configure(font_tag, font=(char_data["font"], char_data["size"]))
+            self.text_area.tag_add(font_tag, start_index, end_index)
+
+            # Применяем жирность
+            if char_data["bold"]:
+                self.text_area.tag_add("bold", start_index, end_index)
+                self.text_area.tag_configure("bold", font=(char_data["font"], char_data["size"], "bold"))
+
+            # Применяем курсив
+            if char_data["italic"]:
+                self.text_area.tag_add("italic", start_index, end_index)
+                self.text_area.tag_configure("italic", font=(char_data["font"], char_data["size"], "italic"))
+
+            # Применяем подчёркивание
+            if char_data["underline"]:
+                self.text_area.tag_add("underline", start_index, end_index)
+                self.text_area.tag_configure("underline", underline=True)
+
+            # Применяем цвет текста
+            if char_data["color"]:
+                color_tag = f"color_{char_data['color']}"
+                self.text_area.tag_configure(color_tag, foreground=char_data["color"])
+                self.text_area.tag_add(color_tag, start_index, end_index)
+
+        print("[DEBUG] Все символы восстановлены из JSON.")
 
     def save_file(self):
-        file_path = filedialog.asksaveasfilename(defaultextension=".txt", filetypes=[("Text Files", "*.txt")])
+        """Сохраняет текст с форматированием в JSON."""
+        file_path = filedialog.asksaveasfilename(defaultextension=".json",
+                                                 filetypes=[("JSON Files", "*.json")])
         if file_path:
-            with open(file_path, "w", encoding="utf-8") as file:
-                file.write(self.text_area.get(1.0, tk.END))
+            try:
+                with open(file_path, "w", encoding="utf-8") as file:
+                    json_data = self.text_to_json()
+                    json.dump(json_data, file, ensure_ascii=False, indent=4)
+                messagebox.showinfo("Сохранение", "Файл успешно сохранён!")
+            except Exception as e:
+                messagebox.showerror("Ошибка", f"Не удалось сохранить файл: {e}")
 
     def change_font(self):
         font_name = self.font_var.get()
@@ -280,6 +430,45 @@ class TextEditor:
             except tk.TclError:
                 messagebox.showwarning("Ошибка", "Выделите текст для изменения цвета.")
 
+    def toggle_bold(self):
+        """Добавляет или убирает жирный шрифт."""
+        try:
+            start_index = self.text_area.index(tk.SEL_FIRST)
+            end_index = self.text_area.index(tk.SEL_LAST)
+            if "bold" in self.text_area.tag_names(start_index):
+                self.text_area.tag_remove("bold", start_index, end_index)
+            else:
+                self.text_area.tag_add("bold", start_index, end_index)
+                self.text_area.tag_configure("bold", font=(self.font_var.get(), self.size_var.get(), "bold"))
+        except tk.TclError:
+            messagebox.showwarning("Ошибка", "Выделите текст для применения жирного шрифта.")
+
+    def toggle_italic(self):
+        """Добавляет или убирает курсив."""
+        try:
+            start_index = self.text_area.index(tk.SEL_FIRST)
+            end_index = self.text_area.index(tk.SEL_LAST)
+            if "italic" in self.text_area.tag_names(start_index):
+                self.text_area.tag_remove("italic", start_index, end_index)
+            else:
+                self.text_area.tag_add("italic", start_index, end_index)
+                self.text_area.tag_configure("italic", font=(self.font_var.get(), self.size_var.get(), "italic"))
+        except tk.TclError:
+            messagebox.showwarning("Ошибка", "Выделите текст для применения курсива.")
+
+    def toggle_underline(self):
+        """Добавляет или убирает подчёркивание."""
+        try:
+            start_index = self.text_area.index(tk.SEL_FIRST)
+            end_index = self.text_area.index(tk.SEL_LAST)
+            if "underline" in self.text_area.tag_names(start_index):
+                self.text_area.tag_remove("underline", start_index, end_index)
+            else:
+                self.text_area.tag_add("underline", start_index, end_index)
+                self.text_area.tag_configure("underline", underline=True)
+        except tk.TclError:
+            messagebox.showwarning("Ошибка", "Выделите текст для применения подчёркивания.")
+
     def update_status_bar(self, event=None):
         cursor_position = self.text_area.index(tk.INSERT)
         row, col = map(int, cursor_position.split('.'))
@@ -290,13 +479,20 @@ class TextEditor:
             text=f"Строка: {row} | Столбец: {col} | Слов: {num_words} | Символов: {num_chars}"
         )
 
+    def undo(self):
+        """Отменяет последнее действие (текст, форматирование или вставка)."""
+        try:
+            self.text_area.edit_undo()  # Выполняем отмену
+        except tk.TclError:
+            messagebox.showinfo("Отмена", "Нет действий для отмены.")
+
     def confirm_exit(self):
         """Запрос подтверждения выхода из программы."""
         if messagebox.askyesno("Подтверждение выхода", "Вы действительно хотите выйти?"):
             self.root.quit()
 
     def bind_shortcuts(self):
-        self.root.bind("<Control-z>", lambda event: self.text_area.edit_undo())
+        self.root.bind("<Control-z>", lambda event: self.undo())
         self.root.bind("<Control-y>", lambda event: self.text_area.edit_redo())
         self.root.bind("<Control-o>", lambda event: self.open_file())
         self.root.bind("<Control-s>", lambda event: self.save_file())
