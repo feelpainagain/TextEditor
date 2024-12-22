@@ -697,11 +697,6 @@ class TextEditor:
             self.root.quit()
 
     def bind_shortcuts(self):
-        """Привязка горячих клавиш."""
-        print("[DEBUG] Привязка горячих клавиш")
-        self.root.bind("<Control-z>", self.undo)
-        self.root.bind("<Control-y>", self.redo)
-        print("[DEBUG] Горячие клавиши успешно привязаны")
         self.root.bind("<Control-o>", self.open_file)
         self.root.bind("<Control-s>", self.save_file)
         self.root.bind("<Control-f>", self.search_text)
