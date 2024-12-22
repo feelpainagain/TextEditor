@@ -32,9 +32,18 @@ class TextEditor:
 
         # Обновление статуса
         self.text_area.bind("<KeyRelease>", self.update_status_bar)
+        self.text_area.bind("<Control-z>", lambda event: self.undo())
 
         # Главное меню
         self.create_menu()
+
+        self.history = []  # Стек для хранения истории действий
+        self.redo_stack = []  # Стек для повторения отменённых действий
+        self.is_restoring = False  # Флаг, чтобы избежать зацикливания
+
+        # Сохранение действий
+        self.text_area.bind("<KeyRelease>", lambda event: self.record_change(event, "text"))
+        self.text_area.bind("<ButtonRelease-1>", lambda event: self.record_change(event, "format"))
 
         # Привязка горячих клавиш
         self.bind_shortcuts()
@@ -53,7 +62,7 @@ class TextEditor:
         # Меню Правка
         edit_menu = tk.Menu(menu, tearoff=0)
         edit_menu.add_command(label="Отменить", command=self.undo, accelerator="Ctrl+Z")
-        edit_menu.add_command(label="Повторить", command=self.text_area.edit_redo, accelerator="Ctrl+Y")
+        edit_menu.add_command(label="Повторить", command=self.redo, accelerator="Ctrl+Y")
         edit_menu.add_separator()
         edit_menu.add_command(label="Поиск", command=self.search_text, accelerator="Ctrl+F")
         edit_menu.add_command(label="Поиск и замена", command=self.find_and_replace, accelerator="Ctrl+H")
@@ -355,15 +364,12 @@ class TextEditor:
         self.text_area.delete(1.0, tk.END)  # Удаляем существующий текст
 
         for char_data in json_data:
+            # Логирование восстановления символа
+            print(f"[DEBUG] Восстановление символа: '{char_data['text']}' с форматированием: {char_data}")
+
             start_index = self.text_area.index(tk.INSERT)
             self.text_area.insert(tk.INSERT, char_data["text"])
             end_index = self.text_area.index(tk.INSERT)
-
-            print(f"[DEBUG] Восстановление символа: '{char_data['text']}'")
-            print(
-                f"[DEBUG] Применяем шрифт: {char_data['font']}, Размер: {char_data['size']}, Цвет: {char_data['color']}")
-            print(
-                f"[DEBUG] Жирный: {char_data['bold']}, Курсив: {char_data['italic']}, Подчёркивание: {char_data['underline']}")
 
             # Применяем шрифт и размер
             font_tag = f"font_{char_data['font']}_{char_data['size']}"
@@ -372,22 +378,26 @@ class TextEditor:
 
             # Применяем жирность
             if char_data["bold"]:
+                print(f"[DEBUG] Применение жирного шрифта: {start_index} - {end_index}")
                 self.text_area.tag_add("bold", start_index, end_index)
                 self.text_area.tag_configure("bold", font=(char_data["font"], char_data["size"], "bold"))
 
             # Применяем курсив
             if char_data["italic"]:
+                print(f"[DEBUG] Применение курсива: {start_index} - {end_index}")
                 self.text_area.tag_add("italic", start_index, end_index)
                 self.text_area.tag_configure("italic", font=(char_data["font"], char_data["size"], "italic"))
 
             # Применяем подчёркивание
             if char_data["underline"]:
+                print(f"[DEBUG] Применение подчёркивания: {start_index} - {end_index}")
                 self.text_area.tag_add("underline", start_index, end_index)
                 self.text_area.tag_configure("underline", underline=True)
 
             # Применяем цвет текста
             if char_data["color"]:
                 color_tag = f"color_{char_data['color']}"
+                print(f"[DEBUG] Применение цвета текста '{char_data['color']}': {start_index} - {end_index}")
                 self.text_area.tag_configure(color_tag, foreground=char_data["color"])
                 self.text_area.tag_add(color_tag, start_index, end_index)
 
@@ -419,14 +429,22 @@ class TextEditor:
             messagebox.showwarning("Ошибка", "Выделите текст для изменения шрифта.")
 
     def change_text_color(self):
-        color = colorchooser.askcolor()[1]
+        """Изменяет цвет выделенного текста."""
+        color = colorchooser.askcolor()[1]  # Выбираем цвет
         if color:
             try:
                 start_index = self.text_area.index(tk.SEL_FIRST)
                 end_index = self.text_area.index(tk.SEL_LAST)
                 color_tag = f"color_{color}"
+
+                # Настраиваем и добавляем тег цвета
                 self.text_area.tag_configure(color_tag, foreground=color)
                 self.text_area.tag_add(color_tag, start_index, end_index)
+
+                print(f"[DEBUG] Цвет изменён: {color} ({start_index} - {end_index})")
+
+                # Сохраняем изменение в историю
+                self.record_change(change_type="format")
             except tk.TclError:
                 messagebox.showwarning("Ошибка", "Выделите текст для изменения цвета.")
 
@@ -479,26 +497,206 @@ class TextEditor:
             text=f"Строка: {row} | Столбец: {col} | Слов: {num_words} | Символов: {num_chars}"
         )
 
+    def record_change(self, event=None, change_type="text"):
+        if self.is_restoring:
+            print("[DEBUG] Пропуск записи изменения из-за is_restoring")
+            return
+
+        if change_type == "text":
+            current_text = self.text_area.get(1.0, tk.END).strip()
+            cursor_position = self.text_area.index(tk.INSERT)
+
+            if self.history and self.history[-1]["type"] == "text" and self.history[-1]["text"] == current_text:
+                print("[DEBUG] Изменение текста совпадает с последним сохранённым состоянием, запись пропущена")
+                return
+
+            action = {"type": "text", "text": current_text, "cursor": cursor_position}
+        elif change_type == "format":
+            try:
+                start_index = self.text_area.index(tk.SEL_FIRST)
+                end_index = self.text_area.index(tk.SEL_LAST)
+                tags = self.text_area.tag_names(start_index)
+
+                action = {"type": "format", "start": start_index, "end": end_index, "tags": tags}
+            except tk.TclError:
+                print("[DEBUG] Нет выделенного текста для записи форматирования")
+                return
+
+        self.history.append(action)
+        self.redo_stack.clear()
+        print(f"[DEBUG] Добавлено действие в history: {action}")
+
+    def get_font_from_tags(self, tags):
+        """Возвращает шрифт из списка тегов."""
+        for tag in tags:
+            try:
+                font_config = self.text_area.tag_cget(tag, "font")
+                if font_config:
+                    return font_config.split()[0]
+            except tk.TclError:
+                continue
+        return "Arial"
+
+    def get_font_size_from_tags(self, tags):
+        """Возвращает размер шрифта из списка тегов."""
+        for tag in tags:
+            try:
+                font_config = self.text_area.tag_cget(tag, "font")
+                if font_config and len(font_config.split()) > 1:
+                    return int(font_config.split()[1])
+            except tk.TclError:
+                continue
+        return 12
+
+    def get_color_from_tags(self, tags):
+        """Возвращает цвет из списка тегов."""
+        for tag in tags:
+            try:
+                if tag.startswith("color_"):
+                    return self.text_area.tag_cget(tag, "foreground")
+            except tk.TclError:
+                continue
+        return "#000000"
+
+    def get_affected_range(self, cursor_position, tags):
+        """Возвращает диапазон текста, затронутого изменением."""
+        start_index = cursor_position
+        end_index = f"{cursor_position} +1c"
+
+        for tag in tags:
+            ranges = self.text_area.tag_ranges(tag)
+            for i in range(0, len(ranges), 2):
+                if self.text_area.compare(cursor_position, ">=", ranges[i]) and self.text_area.compare(cursor_position,
+                                                                                                       "<",
+                                                                                                       ranges[i + 1]):
+                    start_index = ranges[i]
+                    end_index = ranges[i + 1]
+                    break
+
+        return start_index, end_index
+
     def undo(self):
-        """Отменяет последнее действие (текст, форматирование или вставка)."""
-        try:
-            self.text_area.edit_undo()  # Выполняем отмену
-        except tk.TclError:
+        """Отменяет последнее действие."""
+        if not self.history:
+            print("[DEBUG] История пуста. Нечего отменять.")
             messagebox.showinfo("Отмена", "Нет действий для отмены.")
+            return
+
+        last_action = self.history.pop()
+        print(f"[DEBUG] Отменяется действие: {last_action}")
+
+        self.is_restoring = True
+        try:
+            if last_action["type"] == "text":
+                self.text_area.delete(1.0, tk.END)
+                self.text_area.insert(1.0, last_action["text"])
+                self.text_area.mark_set(tk.INSERT, last_action["cursor"])
+                print("[DEBUG] Восстановлено текстовое действие.")
+
+            elif last_action["type"] == "format":
+                start = last_action["start"]
+                end = last_action["end"]
+
+                for tag in last_action["tags"]:
+                    self.text_area.tag_remove(tag, start, end)
+
+                if last_action.get("color"):
+                    color_tag = f"color_{last_action['color']}"
+                    self.text_area.tag_configure(color_tag, foreground=last_action["color"])
+                    self.text_area.tag_add(color_tag, start, end)
+
+                print(f"[DEBUG] Форматирование восстановлено: {start} - {end}")
+
+            self.redo_stack.append(last_action)
+            print("[DEBUG] Действие добавлено в стек redo.")
+        except tk.TclError as e:
+            print(f"[ERROR] Ошибка в undo: {e}")
+        finally:
+            self.is_restoring = False
+
+    def redo(self):
+        """Повторяет последнее отменённое действие."""
+        if not self.redo_stack:
+            print("[DEBUG] Стек redo пуст, повтор невозможен.")
+            messagebox.showinfo("Повтор", "Нет действий для повторения.")
+            return
+
+        last_action = self.redo_stack.pop()
+        print(f"[DEBUG] Повтор действия: {last_action}")
+
+        self.is_restoring = True
+        try:
+            if last_action["type"] == "text":
+                self.text_area.delete(1.0, tk.END)
+                self.text_area.insert(1.0, last_action["text"])
+                self.text_area.mark_set(tk.INSERT, last_action["cursor"])
+            elif last_action["type"] == "format":
+                start = last_action["start"]
+                end = last_action["end"]
+                for tag in last_action["tags"]:
+                    self.text_area.tag_add(tag, start, end)
+
+                if last_action.get("color"):
+                    color_tag = f"color_{last_action['color']}"
+                    self.text_area.tag_configure(color_tag, foreground=last_action["color"])
+                    self.text_area.tag_add(color_tag, start, end)
+
+            self.history.append(last_action)
+            print(f"[DEBUG] Действие добавлено обратно в history: {last_action}")
+        except Exception as e:
+            print(f"[ERROR] Ошибка в redo: {e}")
+        finally:
+            self.is_restoring = False
 
     def confirm_exit(self):
         """Запрос подтверждения выхода из программы."""
         if messagebox.askyesno("Подтверждение выхода", "Вы действительно хотите выйти?"):
             self.root.quit()
 
+    def debug_undo(self, event=None):
+        if self.is_restoring:
+            print("[DEBUG] Пропуск undo из-за is_restoring (горячие клавиши)")
+            return
+        print("[DEBUG] Вызвана функция undo через хоткей")
+        self.undo()
+
+    def debug_redo(self, event=None):
+        print("[DEBUG] Вызвана функция redo через хоткей")
+        self.redo()
+
+    def safe_undo(self, event=None):
+        """Безопасный вызов undo через горячие клавиши."""
+        try:
+            if self.is_restoring:
+                print("[DEBUG] Пропуск undo из-за is_restoring (горячие клавиши)")
+                return
+            print("[DEBUG] Вызвана функция undo через хоткей")
+            self.undo()
+        except Exception as e:
+            print(f"[ERROR] Ошибка при вызове safe_undo: {e}")
+
+    def safe_redo(self, event=None):
+        """Безопасный вызов redo через горячие клавиши."""
+        try:
+            if self.is_restoring:
+                print("[DEBUG] Пропуск redo из-за is_restoring (горячие клавиши)")
+                return
+            print("[DEBUG] Вызвана функция redo через хоткей")
+            self.redo()
+        except Exception as e:
+            print(f"[ERROR] Ошибка при вызове safe_redo: {e}")
+
     def bind_shortcuts(self):
-        self.root.bind("<Control-z>", lambda event: self.undo())
-        self.root.bind("<Control-y>", lambda event: self.text_area.edit_redo())
-        self.root.bind("<Control-o>", lambda event: self.open_file())
-        self.root.bind("<Control-s>", lambda event: self.save_file())
-        self.root.bind("<Control-f>", lambda event: self.search_text())
-        self.root.bind("<Control-r>", lambda event: self.find_and_replace())
-        self.root.bind("<Control-q>", lambda event: self.confirm_exit())
+        """Привязка горячих клавиш."""
+        print("[DEBUG] Привязка горячих клавиш")
+        self.root.bind("<Control-z>", self.undo)
+        self.root.bind("<Control-y>", self.redo)
+        print("[DEBUG] Горячие клавиши успешно привязаны")
+        self.root.bind("<Control-o>", self.open_file)
+        self.root.bind("<Control-s>", self.save_file)
+        self.root.bind("<Control-f>", self.search_text)
+        self.root.bind("<Control-r>", self.find_and_replace)
+        self.root.bind("<Control-q>", self.confirm_exit)
 
 
 if __name__ == "__main__":
