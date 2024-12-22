@@ -511,11 +511,7 @@ class TextEditor:
                 print("[DEBUG] Изменение текста совпадает с последним сохранённым состоянием, запись пропущена")
                 return
 
-            action = {
-                "type": "text",
-                "text": current_text,
-                "cursor": cursor_position,
-            }
+            action = {"type": "text", "text": current_text, "cursor": cursor_position}
 
         elif change_type == "format":
             if not self.text_area.tag_ranges(tk.SEL):
@@ -538,6 +534,7 @@ class TextEditor:
                 "type": "format",
                 "start": start_index,
                 "end": end_index,
+                "tags": tags,
                 "font": font,
                 "size": size,
                 "bold": bold,
@@ -602,13 +599,10 @@ class TextEditor:
     def undo(self):
         """Отменяет последнее действие."""
         if not self.history:
-            print("[DEBUG] История пуста. Нечего отменять.")
             messagebox.showinfo("Отмена", "Нет действий для отмены.")
             return
 
         last_action = self.history.pop()
-        print(f"[DEBUG] Отменяется действие: {last_action}")
-
         self.is_restoring = True
         try:
             if last_action["type"] == "text":
@@ -618,25 +612,20 @@ class TextEditor:
             elif last_action["type"] == "format":
                 start = last_action["start"]
                 end = last_action["end"]
+                for tag in last_action["tags"]:
+                    self.text_area.tag_remove(tag, start, end)
 
-                for tag in last_action.keys():
-                    if tag in ["font", "size", "bold", "italic", "underline", "color"]:
-                        self.text_area.tag_remove(tag, start, end)
-
+                # Восстановление цвета
                 if last_action.get("color"):
                     color_tag = f"color_{last_action['color']}"
                     self.text_area.tag_configure(color_tag, foreground=last_action["color"])
                     self.text_area.tag_add(color_tag, start, end)
 
-                if last_action.get("bold"):
-                    self.text_area.tag_add("bold", start, end)
-
-                if last_action.get("italic"):
-                    self.text_area.tag_add("italic", start, end)
-
-                if last_action.get("underline"):
-                    self.text_area.tag_add("underline", start, end)
-
+                # Восстановление размера шрифта
+                if last_action.get("font_size"):
+                    font_tag = f"font_{last_action['font']}_{last_action['font_size']}"
+                    self.text_area.tag_configure(font_tag, font=(last_action['font'], last_action['font_size']))
+                    self.text_area.tag_add(font_tag, start, end)
             self.redo_stack.append(last_action)
         except Exception as e:
             print(f"[ERROR] Ошибка в undo: {e}")
@@ -646,13 +635,10 @@ class TextEditor:
     def redo(self):
         """Повторяет последнее отменённое действие."""
         if not self.redo_stack:
-            print("[DEBUG] Стек redo пуст, повтор невозможен.")
             messagebox.showinfo("Повтор", "Нет действий для повторения.")
             return
 
         last_action = self.redo_stack.pop()
-        print(f"[DEBUG] Повтор действия: {last_action}")
-
         self.is_restoring = True
         try:
             if last_action["type"] == "text":
@@ -662,21 +648,16 @@ class TextEditor:
             elif last_action["type"] == "format":
                 start = last_action["start"]
                 end = last_action["end"]
+                # Повторение шрифта и размера
+                font_tag = f"font_{last_action['font']}_{last_action['font_size']}"
+                self.text_area.tag_configure(font_tag, font=(last_action['font'], last_action['font_size']))
+                self.text_area.tag_add(font_tag, start, end)
 
+                # Повторение цвета
                 if last_action.get("color"):
                     color_tag = f"color_{last_action['color']}"
                     self.text_area.tag_configure(color_tag, foreground=last_action["color"])
                     self.text_area.tag_add(color_tag, start, end)
-
-                if last_action.get("bold"):
-                    self.text_area.tag_add("bold", start, end)
-
-                if last_action.get("italic"):
-                    self.text_area.tag_add("italic", start, end)
-
-                if last_action.get("underline"):
-                    self.text_area.tag_add("underline", start, end)
-
             self.history.append(last_action)
         except Exception as e:
             print(f"[ERROR] Ошибка в redo: {e}")
@@ -687,39 +668,6 @@ class TextEditor:
         """Запрос подтверждения выхода из программы."""
         if messagebox.askyesno("Подтверждение выхода", "Вы действительно хотите выйти?"):
             self.root.quit()
-
-    def debug_undo(self, event=None):
-        if self.is_restoring:
-            print("[DEBUG] Пропуск undo из-за is_restoring (горячие клавиши)")
-            return
-        print("[DEBUG] Вызвана функция undo через хоткей")
-        self.undo()
-
-    def debug_redo(self, event=None):
-        print("[DEBUG] Вызвана функция redo через хоткей")
-        self.redo()
-
-    def safe_undo(self, event=None):
-        """Безопасный вызов undo через горячие клавиши."""
-        try:
-            if self.is_restoring:
-                print("[DEBUG] Пропуск undo из-за is_restoring (горячие клавиши)")
-                return
-            print("[DEBUG] Вызвана функция undo через хоткей")
-            self.undo()
-        except Exception as e:
-            print(f"[ERROR] Ошибка при вызове safe_undo: {e}")
-
-    def safe_redo(self, event=None):
-        """Безопасный вызов redo через горячие клавиши."""
-        try:
-            if self.is_restoring:
-                print("[DEBUG] Пропуск redo из-за is_restoring (горячие клавиши)")
-                return
-            print("[DEBUG] Вызвана функция redo через хоткей")
-            self.redo()
-        except Exception as e:
-            print(f"[ERROR] Ошибка при вызове safe_redo: {e}")
 
     def bind_shortcuts(self):
         """Привязка горячих клавиш."""
