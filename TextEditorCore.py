@@ -1,11 +1,9 @@
-import tkinter as tk
 import json
 import os
+import tkinter as tk
+
 from tkinter import filedialog, font, messagebox, colorchooser
-from tkinter.ttk import Progressbar
 from PIL import Image, ImageTk
-from PIL.Image import Resampling
-import ttkbootstrap as ttk
 
 
 class TextEditor:
@@ -270,7 +268,7 @@ class TextEditor:
     def open_file(self):
         """Открывает текстовый или JSON файл с текстом и форматированием."""
         file_path = filedialog.askopenfilename(
-            filetypes=[("JSON Files", "*.json"), ("All Files", "*.*")]
+            filetypes=[("JSON Files", "*.json"), ("Text Files", "*.txt"), ("All Files", "*.*")]
         )
         if file_path:
             file_extension = os.path.splitext(file_path)[1].lower()
@@ -280,8 +278,14 @@ class TextEditor:
                     with open(file_path, "r", encoding="utf-8") as file:
                         json_data = json.load(file)
                         self.json_to_text(json_data)
+                elif file_extension == ".txt":
+                    # Загружаем текст из текстового файла
+                    with open(file_path, "r", encoding="utf-8") as file:
+                        content = file.read()
+                        self.text_area.delete("1.0", tk.END)  # Очистка текстового поля
+                        self.text_area.insert("1.0", content)  # Вставка текста из файла
                 else:
-                    messagebox.showwarning("Ошибка", "Поддерживаются только файлы формата JSON.")
+                    messagebox.showwarning("Ошибка", "Поддерживаются только файлы формата JSON и TXT.")
             except Exception as e:
                 messagebox.showerror("Ошибка", f"Не удалось открыть файл: {e}")
 
@@ -391,15 +395,28 @@ class TextEditor:
                 self.text_area.tag_add(color_tag, start_index, end_index)
 
     def save_file(self):
-        """Сохраняет текст с форматированием в JSON."""
-        file_path = filedialog.asksaveasfilename(defaultextension=".json",
-                                                 filetypes=[("JSON Files", "*.json")])
+        """Сохраняет текст в текстовый файл или файл с форматированием в JSON."""
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".json",
+            filetypes=[("JSON Files", "*.json"), ("Text Files", "*.txt")]
+        )
         if file_path:
+            file_extension = os.path.splitext(file_path)[1].lower()
             try:
-                with open(file_path, "w", encoding="utf-8") as file:
-                    json_data = self.text_to_json()
-                    json.dump(json_data, file, ensure_ascii=False, indent=4)
-                messagebox.showinfo("Сохранение", "Файл успешно сохранён!")
+                if file_extension == ".json":
+                    # Сохраняем текст и форматирование в JSON
+                    with open(file_path, "w", encoding="utf-8") as file:
+                        json_data = self.text_to_json()
+                        json.dump(json_data, file, ensure_ascii=False, indent=4)
+                    messagebox.showinfo("Сохранение", "Файл успешно сохранён в формате JSON!")
+                elif file_extension == ".txt":
+                    # Сохраняем текст в текстовый файл
+                    with open(file_path, "w", encoding="utf-8") as file:
+                        content = self.text_area.get("1.0", tk.END).strip()  # Получаем текст из текстового поля
+                        file.write(content)
+                    messagebox.showinfo("Сохранение", "Файл успешно сохранён в формате TXT!")
+                else:
+                    messagebox.showwarning("Ошибка", "Поддерживаются только файлы формата JSON и TXT.")
             except Exception as e:
                 messagebox.showerror("Ошибка", f"Не удалось сохранить файл: {e}")
 
