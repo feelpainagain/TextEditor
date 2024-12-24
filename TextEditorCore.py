@@ -306,8 +306,6 @@ class TextEditor:
 
                 # Извлекаем теги символа
                 tags = self.text_area.tag_names(current_index)
-                print(f"[DEBUG] Символ: '{char}', Индекс: {current_index}, Теги: {tags}")
-
                 for tag in tags:
                     try:
                         # Извлекаем шрифт
@@ -317,7 +315,6 @@ class TextEditor:
                             font_name = parts[0]
                             if len(parts) > 1:
                                 font_size = int(parts[1])
-                            print(f"[DEBUG] Извлечён шрифт: {font_name}, Размер: {font_size}")
 
                         # Проверяем жирность
                         if tag == "bold":
@@ -334,7 +331,6 @@ class TextEditor:
                         # Проверяем и извлекаем цвет текста
                         if "color" in tag:
                             color = self.text_area.tag_cget(tag, "foreground")
-                            print(f"[DEBUG] Извлечён цвет текста: {color}")
                     except tk.TclError as e:
                         print(f"[ERROR] Ошибка при извлечении данных из тега '{tag}': {e}")
 
@@ -356,7 +352,6 @@ class TextEditor:
                 print(f"[ERROR] Ошибка обработки символа {current_index}: {e}")
                 break
 
-        print("[DEBUG] Все символы обработаны, данные сохранены.")
         return data
 
     def json_to_text(self, json_data):
@@ -364,8 +359,6 @@ class TextEditor:
         self.text_area.delete(1.0, tk.END)  # Удаляем существующий текст
 
         for char_data in json_data:
-            # Логирование восстановления символа
-            print(f"[DEBUG] Восстановление символа: '{char_data['text']}' с форматированием: {char_data}")
 
             start_index = self.text_area.index(tk.INSERT)
             self.text_area.insert(tk.INSERT, char_data["text"])
@@ -378,30 +371,24 @@ class TextEditor:
 
             # Применяем жирность
             if char_data["bold"]:
-                print(f"[DEBUG] Применение жирного шрифта: {start_index} - {end_index}")
                 self.text_area.tag_add("bold", start_index, end_index)
                 self.text_area.tag_configure("bold", font=(char_data["font"], char_data["size"], "bold"))
 
             # Применяем курсив
             if char_data["italic"]:
-                print(f"[DEBUG] Применение курсива: {start_index} - {end_index}")
                 self.text_area.tag_add("italic", start_index, end_index)
                 self.text_area.tag_configure("italic", font=(char_data["font"], char_data["size"], "italic"))
 
             # Применяем подчёркивание
             if char_data["underline"]:
-                print(f"[DEBUG] Применение подчёркивания: {start_index} - {end_index}")
                 self.text_area.tag_add("underline", start_index, end_index)
                 self.text_area.tag_configure("underline", underline=True)
 
             # Применяем цвет текста
             if char_data["color"]:
                 color_tag = f"color_{char_data['color']}"
-                print(f"[DEBUG] Применение цвета текста '{char_data['color']}': {start_index} - {end_index}")
                 self.text_area.tag_configure(color_tag, foreground=char_data["color"])
                 self.text_area.tag_add(color_tag, start_index, end_index)
-
-        print("[DEBUG] Все символы восстановлены из JSON.")
 
     def save_file(self):
         """Сохраняет текст с форматированием в JSON."""
@@ -440,8 +427,6 @@ class TextEditor:
                 # Настраиваем и добавляем тег цвета
                 self.text_area.tag_configure(color_tag, foreground=color)
                 self.text_area.tag_add(color_tag, start_index, end_index)
-
-                print(f"[DEBUG] Цвет изменён: {color} ({start_index} - {end_index})")
 
                 # Сохраняем изменение в историю
                 self.record_change(change_type="format")
@@ -500,7 +485,6 @@ class TextEditor:
     def record_change(self, event=None, change_type="text"):
         """Сохраняет изменения текста или форматирования в историю."""
         if self.is_restoring:
-            print("[DEBUG] Пропуск записи изменения из-за is_restoring")
             return
 
         action = None
@@ -510,7 +494,6 @@ class TextEditor:
             cursor_position = self.text_area.index(tk.INSERT)
 
             if self.history and self.history[-1]["type"] == "text" and self.history[-1]["text"] == current_text:
-                print("[DEBUG] Изменение текста совпадает с последним сохранённым состоянием, запись пропущена")
                 return
 
             action = {
@@ -521,7 +504,6 @@ class TextEditor:
 
         elif change_type == "format":
             if not self.text_area.tag_ranges(tk.SEL):
-                print("[DEBUG] Нет выделенного текста для записи форматирования")
                 return
 
             start_index = self.text_area.index(tk.SEL_FIRST)
@@ -552,7 +534,6 @@ class TextEditor:
         if action:
             self.history.append(action)
             self.redo_stack.clear()
-            print(f"[DEBUG] Записано действие: {action}")
 
     def get_font_from_tags(self, tags):
         """Возвращает шрифт из списка тегов."""
